@@ -4,7 +4,7 @@ import User, { IUser } from '../models/User';
 import { sendError } from '../utils/response';
 
 export interface AuthRequest extends Request {
-  user: IUser;
+  user?: IUser;  // Add ? to make it optional
 }
 
 export const authMiddleware = async (
