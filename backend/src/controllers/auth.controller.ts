@@ -79,10 +79,10 @@ export const login = async (req: Request, res: Response) => {
   }
 };
 
-// Get current user
-export const getMe = async (req: AuthRequest, res: Response) => {
+// Get current user - CHANGED TO Request
+export const getMe = async (req: Request, res: Response) => {
   try {
-    const user = req.user;
+    const user = (req as AuthRequest).user;  // Type assertion added
 
     sendSuccess(res, 200, 'User fetched successfully', {
       user: {
@@ -99,10 +99,10 @@ export const getMe = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// Logout
-export const logout = async (req: AuthRequest, res: Response) => {
+// Logout - CHANGED TO Request
+export const logout = async (req: Request, res: Response) => {
   try {
-    const user = await User.findById(req.user._id);
+    const user = await User.findById((req as AuthRequest).user._id);  // Type assertion added
     
     if (user) {
       user.isOnline = false;

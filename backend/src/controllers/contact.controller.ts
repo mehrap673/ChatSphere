@@ -1,4 +1,4 @@
-import { Response } from 'express';
+import { Request, Response } from 'express';
 import { AuthRequest } from '../middleware/auth.middleware';
 import ContactRequest from '../models/ContactRequest';
 import Contact from '../models/Contact';
@@ -6,23 +6,20 @@ import User from '../models/User';
 import { sendSuccess, sendError } from '../utils/response';
 
 // Send friend request
-export const sendContactRequest = async (req: AuthRequest, res: Response) => {
+export const sendContactRequest = async (req: Request, res: Response) => {
   try {
-    const { userId } = req.body; // ID of user to send request to
-    const currentUserId = req.user._id;
+    const { userId } = req.body;
+    const currentUserId = (req as AuthRequest).user._id;
 
-    // Check if trying to add yourself
     if (userId === currentUserId.toString()) {
       return sendError(res, 400, 'Cannot send request to yourself');
     }
 
-    // Check if user exists
     const targetUser = await User.findById(userId);
     if (!targetUser) {
       return sendError(res, 404, 'User not found');
     }
 
-    // Check if already contacts
     const existingContact = await Contact.findOne({
       $or: [
         { user: currentUserId, contact: userId },
@@ -34,7 +31,6 @@ export const sendContactRequest = async (req: AuthRequest, res: Response) => {
       return sendError(res, 400, 'Already in your contacts');
     }
 
-    // Check for existing pending request
     const existingRequest = await ContactRequest.findOne({
       $or: [
         { from: currentUserId, to: userId, status: 'pending' },
@@ -46,7 +42,6 @@ export const sendContactRequest = async (req: AuthRequest, res: Response) => {
       return sendError(res, 400, 'Contact request already pending');
     }
 
-    // Create contact request
     const contactRequest = await ContactRequest.create({
       from: currentUserId,
       to: userId,
@@ -64,10 +59,10 @@ export const sendContactRequest = async (req: AuthRequest, res: Response) => {
 };
 
 // Get pending contact requests (received)
-export const getPendingRequests = async (req: AuthRequest, res: Response) => {
+export const getPendingRequests = async (req: Request, res: Response) => {
   try {
     const requests = await ContactRequest.find({
-      to: req.user._id,
+      to: (req as AuthRequest).user._id,
       status: 'pending',
     })
       .populate('from', 'name email avatar isOnline lastSeen')
@@ -80,10 +75,10 @@ export const getPendingRequests = async (req: AuthRequest, res: Response) => {
 };
 
 // Get sent contact requests
-export const getSentRequests = async (req: AuthRequest, res: Response) => {
+export const getSentRequests = async (req: Request, res: Response) => {
   try {
     const requests = await ContactRequest.find({
-      from: req.user._id,
+      from: (req as AuthRequest).user._id,
       status: 'pending',
     })
       .populate('to', 'name email avatar isOnline lastSeen')
@@ -96,7 +91,7 @@ export const getSentRequests = async (req: AuthRequest, res: Response) => {
 };
 
 // Accept contact request
-export const acceptContactRequest = async (req: AuthRequest, res: Response) => {
+export const acceptContactRequest = async (req: Request, res: Response) => {
   try {
     const { requestId } = req.params;
 
@@ -106,8 +101,7 @@ export const acceptContactRequest = async (req: AuthRequest, res: Response) => {
       return sendError(res, 404, 'Contact request not found');
     }
 
-    // Verify the request is for current user
-    if (contactRequest.to.toString() !== req.user._id.toString()) {
+    if (contactRequest.to.toString() !== (req as AuthRequest).user._id.toString()) {
       return sendError(res, 403, 'Not authorized to accept this request');
     }
 
@@ -115,11 +109,9 @@ export const acceptContactRequest = async (req: AuthRequest, res: Response) => {
       return sendError(res, 400, 'Request already processed');
     }
 
-    // Update request status
     contactRequest.status = 'accepted';
     await contactRequest.save();
 
-    // Create bidirectional contact relationship
     await Contact.create([
       { user: contactRequest.from, contact: contactRequest.to },
       { user: contactRequest.to, contact: contactRequest.from },
@@ -136,7 +128,7 @@ export const acceptContactRequest = async (req: AuthRequest, res: Response) => {
 };
 
 // Reject contact request
-export const rejectContactRequest = async (req: AuthRequest, res: Response) => {
+export const rejectContactRequest = async (req: Request, res: Response) => {
   try {
     const { requestId } = req.params;
 
@@ -146,8 +138,7 @@ export const rejectContactRequest = async (req: AuthRequest, res: Response) => {
       return sendError(res, 404, 'Contact request not found');
     }
 
-    // Verify the request is for current user
-    if (contactRequest.to.toString() !== req.user._id.toString()) {
+    if (contactRequest.to.toString() !== (req as AuthRequest).user._id.toString()) {
       return sendError(res, 403, 'Not authorized to reject this request');
     }
 
@@ -155,7 +146,6 @@ export const rejectContactRequest = async (req: AuthRequest, res: Response) => {
       return sendError(res, 400, 'Request already processed');
     }
 
-    // Update request status
     contactRequest.status = 'rejected';
     await contactRequest.save();
 
@@ -166,9 +156,9 @@ export const rejectContactRequest = async (req: AuthRequest, res: Response) => {
 };
 
 // Get all contacts
-export const getContacts = async (req: AuthRequest, res: Response) => {
+export const getContacts = async (req: Request, res: Response) => {
   try {
-    const contacts = await Contact.find({ user: req.user._id })
+    const contacts = await Contact.find({ user: (req as AuthRequest).user._id })
       .populate('contact', 'name email avatar isOnline lastSeen')
       .sort({ createdAt: -1 });
 
@@ -181,7 +171,7 @@ export const getContacts = async (req: AuthRequest, res: Response) => {
 };
 
 // Search users (to add as contacts)
-export const searchUsers = async (req: AuthRequest, res: Response) => {
+export const searchUsers = async (req: Request, res: Response) => {
   try {
     const { query } = req.query;
 
@@ -189,9 +179,8 @@ export const searchUsers = async (req: AuthRequest, res: Response) => {
       return sendError(res, 400, 'Search query is required');
     }
 
-    // Search by name or email
     const users = await User.find({
-      _id: { $ne: req.user._id }, // Exclude current user
+      _id: { $ne: (req as AuthRequest).user._id },
       $or: [
         { name: { $regex: query, $options: 'i' } },
         { email: { $regex: query, $options: 'i' } },
@@ -207,15 +196,14 @@ export const searchUsers = async (req: AuthRequest, res: Response) => {
 };
 
 // Remove contact
-export const removeContact = async (req: AuthRequest, res: Response) => {
+export const removeContact = async (req: Request, res: Response) => {
   try {
     const { contactId } = req.params;
 
-    // Remove bidirectional relationship
     await Contact.deleteMany({
       $or: [
-        { user: req.user._id, contact: contactId },
-        { user: contactId, contact: req.user._id },
+        { user: (req as AuthRequest).user._id, contact: contactId },
+        { user: contactId, contact: (req as AuthRequest).user._id },
       ],
     });
 

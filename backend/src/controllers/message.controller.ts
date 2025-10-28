@@ -1,4 +1,4 @@
-import { Response } from 'express';
+import { Request, Response } from 'express';
 import { AuthRequest } from '../middleware/auth.middleware';
 import Message from '../models/Message';
 import Contact from '../models/Contact';
@@ -6,10 +6,10 @@ import { uploadImage, uploadAudio } from '../services/cloudinary.service';
 import { sendSuccess, sendError } from '../utils/response';
 
 // Upload image
-export const uploadImageHandler = async (req: AuthRequest, res: Response) => {
+export const uploadImageHandler = async (req: Request, res: Response) => {
   try {
     console.log('📸 Image upload request received');
-    console.log('User:', req.user?._id);
+    console.log('User:', (req as AuthRequest).user?._id);
     console.log('File:', req.file);
 
     if (!req.file) {
@@ -39,7 +39,7 @@ export const uploadImageHandler = async (req: AuthRequest, res: Response) => {
 };
 
 // Upload audio
-export const uploadAudioHandler = async (req: AuthRequest, res: Response) => {
+export const uploadAudioHandler = async (req: Request, res: Response) => {
   try {
     console.log('🎤 Audio upload request received');
     
@@ -61,12 +61,11 @@ export const uploadAudioHandler = async (req: AuthRequest, res: Response) => {
 };
 
 // Get chat history
-export const getChatHistory = async (req: AuthRequest, res: Response) => {
+export const getChatHistory = async (req: Request, res: Response) => {
   try {
     const { userId } = req.params;
-    const currentUserId = req.user._id;
+    const currentUserId = (req as AuthRequest).user._id;
 
-    // Verify they are contacts
     const isContact = await Contact.findOne({
       user: currentUserId,
       contact: userId,
@@ -76,7 +75,6 @@ export const getChatHistory = async (req: AuthRequest, res: Response) => {
       return sendError(res, 403, 'You can only view messages from your contacts');
     }
 
-    // Get messages between the two users
     const messages = await Message.find({
       $or: [
         { sender: currentUserId, receiver: userId },
@@ -93,7 +91,6 @@ export const getChatHistory = async (req: AuthRequest, res: Response) => {
       .populate('reactions.user', 'name')
       .sort({ createdAt: 1 });
 
-    // Mark messages as read
     await Message.updateMany(
       {
         sender: userId,
@@ -112,10 +109,10 @@ export const getChatHistory = async (req: AuthRequest, res: Response) => {
 };
 
 // Get unread message count
-export const getUnreadCount = async (req: AuthRequest, res: Response) => {
+export const getUnreadCount = async (req: Request, res: Response) => {
   try {
     const unreadCount = await Message.countDocuments({
-      receiver: req.user._id,
+      receiver: (req as AuthRequest).user._id,
       isRead: false,
     });
 
@@ -126,7 +123,7 @@ export const getUnreadCount = async (req: AuthRequest, res: Response) => {
 };
 
 // Delete message
-export const deleteMessage = async (req: AuthRequest, res: Response) => {
+export const deleteMessage = async (req: Request, res: Response) => {
   try {
     const { messageId } = req.params;
 
@@ -136,8 +133,7 @@ export const deleteMessage = async (req: AuthRequest, res: Response) => {
       return sendError(res, 404, 'Message not found');
     }
 
-    // Only sender can delete
-    if (message.sender.toString() !== req.user._id.toString()) {
+    if (message.sender.toString() !== (req as AuthRequest).user._id.toString()) {
       return sendError(res, 403, 'Not authorized to delete this message');
     }
 
@@ -149,8 +145,8 @@ export const deleteMessage = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// NEW: Edit message
-export const editMessage = async (req: AuthRequest, res: Response) => {
+// Edit message
+export const editMessage = async (req: Request, res: Response) => {
   try {
     const { messageId } = req.params;
     const { content } = req.body;
@@ -165,12 +161,10 @@ export const editMessage = async (req: AuthRequest, res: Response) => {
       return sendError(res, 404, 'Message not found');
     }
 
-    // Only sender can edit
-    if (message.sender.toString() !== req.user._id.toString()) {
+    if (message.sender.toString() !== (req as AuthRequest).user._id.toString()) {
       return sendError(res, 403, 'Not authorized to edit this message');
     }
 
-    // Can only edit text messages
     if (message.type !== 'text') {
       return sendError(res, 400, 'Only text messages can be edited');
     }
@@ -196,8 +190,8 @@ export const editMessage = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// NEW: Add/Remove reaction
-export const toggleReaction = async (req: AuthRequest, res: Response) => {
+// Toggle reaction
+export const toggleReaction = async (req: Request, res: Response) => {
   try {
     const { messageId } = req.params;
     const { emoji } = req.body;
@@ -212,18 +206,16 @@ export const toggleReaction = async (req: AuthRequest, res: Response) => {
       return sendError(res, 404, 'Message not found');
     }
 
-    const userId = req.user._id;
+    const userId = (req as AuthRequest).user._id;
     const existingReaction = message.reactions.find(
       (r) => r.user.toString() === userId.toString() && r.emoji === emoji
     );
 
     if (existingReaction) {
-      // Remove reaction
       message.reactions = message.reactions.filter(
         (r) => !(r.user.toString() === userId.toString() && r.emoji === emoji)
       );
     } else {
-      // Add reaction
       message.reactions.push({
         user: userId,
         emoji,

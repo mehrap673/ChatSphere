@@ -1,4 +1,4 @@
-import { Response } from 'express';
+import { Request, Response } from 'express';
 import User from '../models/User';
 import { sendSuccess, sendError } from '../utils/response';
 import { AuthRequest } from '../middleware/auth.middleware';
@@ -6,9 +6,9 @@ import { uploadImage, deleteFile } from '../services/cloudinary.service';
 import fs from 'fs';
 
 // Get current user profile
-export const getMe = async (req: AuthRequest, res: Response) => {
+export const getMe = async (req: Request, res: Response) => {
   try {
-    const user = req.user;
+    const user = (req as AuthRequest).user;
 
     sendSuccess(res, 200, 'User fetched successfully', {
       user: {
@@ -26,17 +26,15 @@ export const getMe = async (req: AuthRequest, res: Response) => {
 };
 
 // Update user profile
-export const updateProfile = async (req: AuthRequest, res: Response) => {
+export const updateProfile = async (req: Request, res: Response) => {
   try {
     const { name, avatar } = req.body;
-    const userId = req.user._id;
+    const userId = (req as AuthRequest).user._id;
 
-    // Validate input
     if (!name && !avatar) {
       return sendError(res, 400, 'Please provide name or avatar to update');
     }
 
-    // Build update object
     const updateData: any = {};
     if (name) {
       if (name.trim().length < 2) {
@@ -46,7 +44,6 @@ export const updateProfile = async (req: AuthRequest, res: Response) => {
     }
     if (avatar) updateData.avatar = avatar;
 
-    // Update user
     const user = await User.findByIdAndUpdate(
       userId,
       updateData,
@@ -73,10 +70,9 @@ export const updateProfile = async (req: AuthRequest, res: Response) => {
 };
 
 // Update avatar with file upload
-// controllers/user.controller.ts
-export const updateAvatar = async (req: AuthRequest, res: Response) => {
+export const updateAvatar = async (req: Request, res: Response) => {
   try {
-    const userId = req.user._id;
+    const userId = (req as AuthRequest).user._id;
     const file = req.file;
 
     console.log('📸 Avatar update request received');
@@ -89,13 +85,11 @@ export const updateAvatar = async (req: AuthRequest, res: Response) => {
       path: file.path
     } : 'undefined');
 
-    // Check if file is provided
     if (!file) {
       console.error('❌ No file received in request');
       return sendError(res, 400, 'Please upload an image file');
     }
 
-    // Validate file type (extra check)
     const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
     if (!allowedTypes.includes(file.mimetype)) {
       console.error('❌ Invalid file type:', file.mimetype);
@@ -105,8 +99,7 @@ export const updateAvatar = async (req: AuthRequest, res: Response) => {
       return sendError(res, 400, 'Only JPEG, PNG, and WebP images are allowed');
     }
 
-    // Validate file size (5MB max for avatars)
-    const maxSize = 5 * 1024 * 1024; // 5MB
+    const maxSize = 5 * 1024 * 1024;
     if (file.size > maxSize) {
       console.error('❌ File too large:', file.size);
       if (fs.existsSync(file.path)) {
@@ -117,7 +110,6 @@ export const updateAvatar = async (req: AuthRequest, res: Response) => {
 
     console.log('✅ File validation passed');
 
-    // Get current user to delete old avatar
     const currentUser = await User.findById(userId);
     if (!currentUser) {
       if (fs.existsSync(file.path)) {
@@ -126,7 +118,6 @@ export const updateAvatar = async (req: AuthRequest, res: Response) => {
       return sendError(res, 404, 'User not found');
     }
 
-    // Delete old avatar from Cloudinary if it exists
     if (currentUser.avatar) {
       try {
         const urlParts = currentUser.avatar.split('/');
@@ -138,16 +129,13 @@ export const updateAvatar = async (req: AuthRequest, res: Response) => {
         console.log('🗑️ Old avatar deleted from Cloudinary');
       } catch (error) {
         console.error('⚠️ Failed to delete old avatar:', error);
-        // Continue with upload even if deletion fails
       }
     }
 
-    // Upload new avatar to Cloudinary
     console.log('📤 Uploading to Cloudinary...');
     const avatarUrl = await uploadImage(file.path);
     console.log('✅ Avatar uploaded successfully:', avatarUrl);
 
-    // Update user with new avatar URL
     const user = await User.findByIdAndUpdate(
       userId,
       { avatar: avatarUrl },
@@ -172,7 +160,6 @@ export const updateAvatar = async (req: AuthRequest, res: Response) => {
   } catch (error: any) {
     console.error('❌ Avatar update error:', error);
 
-    // Clean up uploaded file if it still exists
     if (req.file?.path && fs.existsSync(req.file.path)) {
       fs.unlinkSync(req.file.path);
     }
@@ -181,9 +168,8 @@ export const updateAvatar = async (req: AuthRequest, res: Response) => {
   }
 };
 
-
-// Get user by ID (for viewing other users)
-export const getUserById = async (req: AuthRequest, res: Response) => {
+// Get user by ID
+export const getUserById = async (req: Request, res: Response) => {
   try {
     const { userId } = req.params;
 
@@ -209,18 +195,16 @@ export const getUserById = async (req: AuthRequest, res: Response) => {
 };
 
 // Delete user account
-export const deleteAccount = async (req: AuthRequest, res: Response) => {
+export const deleteAccount = async (req: Request, res: Response) => {
   try {
-    const userId = req.user._id;
+    const userId = (req as AuthRequest).user._id;
 
-    // Get user to delete avatar from Cloudinary
     const user = await User.findById(userId);
 
     if (!user) {
       return sendError(res, 404, 'User not found');
     }
 
-    // Delete avatar from Cloudinary if exists
     if (user.avatar) {
       try {
         const urlParts = user.avatar.split('/');
@@ -232,11 +216,9 @@ export const deleteAccount = async (req: AuthRequest, res: Response) => {
         console.log('🗑️ User avatar deleted from Cloudinary');
       } catch (error) {
         console.error('Failed to delete avatar:', error);
-        // Continue with account deletion even if avatar deletion fails
       }
     }
 
-    // Delete user account
     await User.findByIdAndDelete(userId);
 
     sendSuccess(res, 200, 'Account deleted successfully', null);
@@ -246,10 +228,10 @@ export const deleteAccount = async (req: AuthRequest, res: Response) => {
 };
 
 // Change password
-export const changePassword = async (req: AuthRequest, res: Response) => {
+export const changePassword = async (req: Request, res: Response) => {
   try {
     const { currentPassword, newPassword } = req.body;
-    const userId = req.user._id;
+    const userId = (req as AuthRequest).user._id;
 
     if (!currentPassword || !newPassword) {
       return sendError(res, 400, 'Current password and new password are required');
@@ -259,20 +241,17 @@ export const changePassword = async (req: AuthRequest, res: Response) => {
       return sendError(res, 400, 'New password must be at least 6 characters long');
     }
 
-    // Find user with password
     const user = await User.findById(userId).select('+password');
 
     if (!user) {
       return sendError(res, 404, 'User not found');
     }
 
-    // Verify current password
     const isPasswordValid = await user.comparePassword(currentPassword);
     if (!isPasswordValid) {
       return sendError(res, 401, 'Current password is incorrect');
     }
 
-    // Update password
     user.password = newPassword;
     await user.save();
 
