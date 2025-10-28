@@ -4,16 +4,16 @@ import User, { IUser } from '../models/User';
 import { sendError } from '../utils/response';
 
 export interface AuthRequest extends Request {
-  user?: IUser;  // Add ? to make it optional
+  user?: IUser;
 }
 
 export const authMiddleware = async (
-  req: AuthRequest,
+  req: Request,  // Change back to Request
   res: Response,
   next: NextFunction
 ) => {
   try {
-    const token = req.headers.authorization?.split(' ')[1]; // Bearer <token>
+    const token = req.headers.authorization?.split(' ')[1];
 
     if (!token) {
       return sendError(res, 401, 'No token provided. Authorization denied.');
@@ -26,7 +26,7 @@ export const authMiddleware = async (
       return sendError(res, 401, 'User not found. Authorization denied.');
     }
 
-    req.user = user;
+    (req as AuthRequest).user = user;  // Type assertion
     next();
   } catch (error) {
     return sendError(res, 401, 'Invalid token. Authorization denied.');
