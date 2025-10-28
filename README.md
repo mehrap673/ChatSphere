@@ -79,6 +79,16 @@ VITE_PORT=5173
 - `PUT /api/messages/:id/edit` - Edit message
 - `POST /api/messages/:id/reaction` - Toggle reaction
 
-## Author
+## Screenshots
 
+### Light Theme
+![Login Page](assets/Light-login.png)
+![Chat Interface](assets/Light-chat.png)
+
+### Dark Theme
+![Login Page](assets/Dark-login.png)
+![Chat Interface](assets/Dark-chat.png)
+
+
+## Author
 **Pankaj Mehra**  
